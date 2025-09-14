@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Happy Birthday Dani 💖</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; touch-action:none; }
+body { background:#ff66cc; font-family:'Press Start 2P', cursive; }
+#gameCanvas { position:absolute; top:0; left:0; width:100%; height:100%; }
+#hud { position:absolute; top:1%; left:1%; color:#fff; text-shadow:2px 2px #000; z-index:5; font-size:calc(10px + 1.5vw); }
+#tapToStart {
+  position:absolute; top:35%; left:50%; transform:translate(-50%, -50%);
+  text-align:center; color:white; text-shadow:2px 2px #000; cursor:pointer; line-height:1.4; z-index:5;
+}
+#tapToStart p:first-child { font-size:calc(14px + 3vw); margin-bottom:25px; }
+#gameMechanics {
+  position:absolute; bottom:10%; left:50%; transform:translateX(-50%);
+  text-align:center; color:white; text-shadow:2px 2px #000; font-size:calc(10px + 1.5vw); z-index:5;
+}
+#giftPrompt {
+  position:absolute;
+  color:white;
+  text-shadow:2px 2px #000;
+  font-size:calc(12px + 2vw);
+  z-index:5;
+  display:none;
+  text-align:center;
+}
+#messageBox {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  background: #ffccff; border:4px solid #ff00aa;
+  width:90%; max-width:380px; max-height:90vh; overflow:hidden;
+  text-align:center; font-family:'Press Start 2P', cursive; font-size:14px; line-height:1.5;
+  display:none; z-index:10; padding:20px;
+}
+#messageBox img {
+  width:80%; max-width:250px; border:4px solid #ff00aa; border-radius:10px; display:block; margin:0 auto 15px auto;
+}
+#gameOverBox {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  background: #ffccff; border:4px solid #ff00aa;
+  width:90%; max-width:380px; height:auto; max-height:90vh; overflow:hidden;
+  text-align:center; font-family:'Press Start 2P', cursive; font-size:14px; line-height:1.5;
+  display:none; z-index:10; padding:20px;
+}
+#tryAgainBtn {
+  margin-top:15px; padding:12px 24px; background:#ff00aa; color:white;
+  font-family:'Press Start 2P', cursive; border:none; cursor:pointer; border-radius:0; font-size:16px;
+}
+#tryAgainBtn:hover { background:#ff0088; }
+.floatingText { font-family:'Press Start 2P', cursive; font-size:16px; color:#fff; text-shadow:1px 1px #000; }
+@media (max-width:600px){
+  #messageBox { font-size:12px; }
+  #tapToStart p:first-child { font-size:18px; }
+  #giftPrompt { font-size:16px; }
+}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="hud">Score: 0 | Time: 45</div>
+<div id="tapToStart"><p>💖 Tap to Start 💖</p></div>
+<div id="gameMechanics">Pop 26 balloons for a surprise!</div>
+<div id="giftPrompt">Tap the gift 3x</div>
+<div id="messageBox">
+  <img src="dani.jpeg" alt="Dani">
+  <p>
+    Happy birthday, mahal :)<br><br>
+    Your life is a gift not just to me, but to everyone around you. You make everything feel light and easy, and for that I’m truly thankful. I wish you a life full of happiness and blessings.<br><br>
+    I love you, Dani, always, in all ways. :))<br><br>
+    xo,<br>
+    Hanna
+  </p>
+</div>
+<div id="gameOverBox">
+  <p>GAME OVER 💔<br>Try again?</p>
+  <button id="tryAgainBtn">TRY AGAIN</button>
+</div>
+<audio id="bgMusic" src="bg-music.mp3" loop></audio>
+<audio id="popSound" src="pop.mp3"></audio>
+
+<script>
+const canvas=document.getElementById("gameCanvas");
+const ctx=canvas.getContext("2d");
+function resizeCanvas(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+resizeCanvas(); window.addEventListener("resize",resizeCanvas);
+
+let balloons=[], floatingTexts=[], score=0, timer=45;
+let gameActive=false, gameEnded=false, timerInterval;
+const MAX_BALLOONS=15;
+const hud=document.getElementById("hud"),
+      tapToStart=document.getElementById("tapToStart"),
+      gameMechanics=document.getElementById("gameMechanics"),
+      messageBox=document.getElementById("messageBox"),
+      gameOverBox=document.getElementById("gameOverBox"),
+      tryAgainBtn=document.getElementById("tryAgainBtn"),
+      bgMusic=document.getElementById("bgMusic"),
+      popSound=document.getElementById("popSound"),
+      giftPrompt=document.getElementById("giftPrompt");
+
+const balloonImg=new Image(); balloonImg.src="balloon.png";
+const giftImg=new Image(); giftImg.src="giftbox.png"; let giftLoaded=false;
+giftImg.onload = ()=>{ giftLoaded=true; }
+
+let giftBox={x:0, y:0, size:240, taps:0, visible:false, bounceOffset:0};
+let confetti=[];
+
+class Balloon{
+  constructor(existingBalloons){
+    this.size=window.innerWidth<=600?60:50;
+    this.vy=window.innerWidth<=600?-4:-2.5;
+    let tries=0;
+    do{ this.x=Math.random()*(canvas.width-this.size*2)+this.size; this.y=canvas.height+this.size+Math.random()*50; tries++; }
+    while(existingBalloons.some(b=>Math.abs(b.x-this.x)<this.size*1.5)&&tries<100);
+  }
+  draw(){ ctx.globalAlpha=1; ctx.drawImage(balloonImg,this.x-this.size/2,this.y-this.size,this.size,this.size);}
+  update(){ this.y+=this.vy; if(this.y+this.size<0){ balloons.splice(balloons.indexOf(this),1); } this.draw();}
+  isClicked(mx,my){ return mx>=this.x-this.size/2&&mx<=this.x+this.size/2&&my>=this.y-this.size&&my<=this.y; }
+}
+class FloatingText{
+  constructor(x,y,text){ this.x=x; this.y=y; this.text=text; this.alpha=1;}
+  draw(){ ctx.fillStyle=`rgba(255,255,255,${this.alpha})`; ctx.font=`16px 'Press Start 2P'`; ctx.fillText(this.text,this.x,this.y);}
+  update(){ this.y-=1; this.alpha-=0.02; this.draw();}
+}
+
+function spawnBalloonIfNeeded(){ if(balloons.length<MAX_BALLOONS && gameActive) balloons.push(new Balloon(balloons)); }
+setInterval(spawnBalloonIfNeeded,300);
+
+function drawGiftBox(){
+    if(!giftBox.visible || !giftLoaded) return;
+    giftBox.bounceOffset = 10 * Math.sin(Date.now()/300);
+    let pulse=15*Math.sin(Date.now()/300);
+    let size=giftBox.size+pulse;
+    ctx.drawImage(giftImg, giftBox.x+giftBox.bounceOffset-pulse/2, giftBox.y-pulse/2, size, size);
+}
+
+function drawConfetti(){ confetti.forEach((c,i)=>{ ctx.fillStyle=c.color; ctx.fillRect(c.x,c.y,c.size,c.size); c.y+=c.vy; if(c.y>canvas.height) confetti.splice(i,1); });}
+function startConfetti(){ for(let i=0;i<150;i++){ confetti.push({x:Math.random()*canvas.width,y:Math.random()*-canvas.height,vy:2+Math.random()*2,size:5+Math.random()*5,color:`hsl(${Math.random()*360},100%,50%)`});} }
+
+function draw(){ ctx.clearRect(0,0,canvas.width,canvas.height); if(gameActive){ balloons.forEach(b=>b.update()); floatingTexts.forEach((ft,i)=>{ ft.update(); if(ft.alpha<=0) floatingTexts.splice(i,1); }); } drawGiftBox(); drawConfetti(); requestAnimationFrame(draw); }
+
+function startGame(){
+  gameActive=true; gameEnded=false; score=0; timer=45; balloons=[]; floatingTexts=[]; giftBox.visible=false; giftBox.taps=0;
+  hud.style.display="block"; hud.innerText=`Score: ${score} | Time: ${timer}`;
+  tapToStart.style.display="none"; messageBox.style.display="none"; gameOverBox.style.display="none"; giftPrompt.style.display="none";
+
+  // Hide game mechanics at the start
+  gameMechanics.style.display="none";
+
+  spawnBalloonIfNeeded(); draw(); bgMusic.volume=1; bgMusic.play().catch(()=>{});
+  clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    if(!gameActive) return;
+    timer-=0.1;
+    if(timer<=0){ timer=0; endGame(false); clearInterval(timerInterval);}
+    hud.innerText=`Score: ${score} | Time: ${timer.toFixed(1)}`;
+  },100);
+}
+
+// Updated popBalloon function to play sound consistently
+function popBalloon(mx,my){
+  if(!gameActive) return;
+  balloons.forEach((b,index)=>{
+    if(b.isClicked(mx,my)){
+      balloons.splice(index,1);
+      score++;
+      floatingTexts.push(new FloatingText(mx,my,"+1"));
+
+      // Play pop sound reliably by cloning audio
+      const pop = popSound.cloneNode();
+      pop.play().catch(()=>{});
+
+      hud.innerText=`Score: ${score} | Time: ${timer.toFixed(1)}`;
+
+      if(score>=26 && !giftBox.visible && giftLoaded){
+        gameActive = false;                
+        clearInterval(timerInterval);       
+        hud.style.display="none";
+
+        giftBox.visible = true;
+        giftBox.x = canvas.width/2 - giftBox.size/2;
+        giftBox.y = canvas.height/2 - giftBox.size/2;
+
+        // Position gift prompt below the gift box
+        giftPrompt.style.display="block";
+        giftPrompt.style.left = (giftBox.x + giftBox.size/2) + "px";
+        giftPrompt.style.top = (giftBox.y + giftBox.size + 10) + "px";
+        giftPrompt.style.transform = "translateX(-50%)";
+
+        bgMusic.volume = 0.3;
+        startConfetti();
+      }
+    }
+  });
+}
+
+function checkGiftBoxTap(mx,my){
+  if(!giftBox.visible) return;
+  if(mx>=giftBox.x-15 && mx<=giftBox.x+giftBox.size+15 &&
+     my>=giftBox.y-15 && my<=giftBox.y+giftBox.size+15){
+    giftBox.taps++;
+    if(giftBox.taps>=3){
+      giftBox.visible=false;
+      giftPrompt.style.display="none";
+      messageBox.style.display="block";  
+      startConfetti();
+    }
+  }
+}
+
+function endGame(win){ gameActive=false; gameEnded=true; clearInterval(timerInterval); if(!win) gameOverBox.style.display="block"; }
+
+function getCanvasMousePos(evt){
+  const rect=canvas.getBoundingClientRect();
+  let x,y;
+  if(evt.touches){ x=evt.touches[0].clientX-rect.left; y=evt.touches[0].clientY-rect.top; }
+  else{ x=evt.clientX-rect.left; y=evt.clientY-rect.top; }
+  return {x,y};
+}
+
+canvas.addEventListener("click", e => { const {x,y}=getCanvasMousePos(e); popBalloon(x,y); checkGiftBoxTap(x,y); });
+canvas.addEventListener("touchstart", e => { const {x,y}=getCanvasMousePos(e); popBalloon(x,y); checkGiftBoxTap(x,y); e.preventDefault(); }, {passive:false});
+tapToStart.addEventListener("click",startGame);
+tapToStart.addEventListener("touchstart",(e)=>{startGame(); e.preventDefault();},{passive:false});
+tryAgainBtn.addEventListener("click",startGame);
+</script>
+</body>
+</html>
